@@ -1,234 +1,200 @@
-const COLUMNS = 25;
-const mappedSurfaceElement = document.getElementById('mapped');
-const robotSurfaceElement = document.getElementById('surface');
-const clearButton = document.getElementById('btn-clear');
+const canvas = document.getElementById('canvas');
+const mapCanvas = document.getElementById('map');
 
-const htmlSurfaceCells = Array(COLUMNS).fill().map(() => Array(COLUMNS));
+const ctx = canvas.getContext('2d');
+const mapCtx = mapCanvas.getContext('2d');
 
-document.querySelector(':root').style.setProperty('--columns', COLUMNS);
+const statsX = document.getElementById('x');
+const statsY = document.getElementById('y');
+const statsDirection = document.getElementById('direction');
+const statsSensor = document.getElementById('sensor');
 
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+const width = canvas.width = 200;
+const height = canvas.height = 200;
+
+mapCanvas.width = width * 1.5;
+mapCanvas.height = height * 1.5;
+
+const robot = {
+    x: 100,
+    y: 100,
+    color: 'white',
+    radius: width / 20,
+    direction: 0,
+    speed: 1,
+    setX: (x) => {
+        if (x < robot.radius) {
+            x = robot.radius;
+        } else if (x > width - robot.radius) {
+            x = width - robot.radius;
+        }
+        robot.x = x;
+        draw();
+    },
+    setY: (y) => {
+        if (y < robot.radius) {
+            y = robot.radius;
+        } else if (y > height - robot.radius) {
+            y = height - robot.radius;
+        }
+        robot.y = y;
+        draw();
+    },
+    setColor: (color) => {
+        robot.color = color;
+        draw();
+    },
+    setRadius: (radius) => {
+        robot.radius = radius;
+        draw();
+    },
+    setDirection: (direction) => {
+        robot.direction = direction;
+        draw();
+    },
+    getSensor: () => {
+        // return distance to the wall in front of the robot
+        let sensorX = robot.x + Math.cos(robot.direction) * robot.radius;
+        let sensorY = robot.y + Math.sin(robot.direction) * robot.radius;
+        let distance = 0;
+        while (sensorX > 0 && sensorX < width && sensorY > 0 && sensorY < height) {
+            sensorX += Math.cos(robot.direction);
+            sensorY += Math.sin(robot.direction);
+            distance++;
+        }
+        return distance;
+    },
+    moveForward: () => {
+        robot.setX(robot.x + Math.cos(robot.direction) * robot.speed);
+        robot.setY(robot.y + Math.sin(robot.direction) * robot.speed);
+    },
+    moveBackward: () => {
+        robot.setX(robot.x - Math.cos(robot.direction) * robot.speed);
+        robot.setY(robot.y - Math.sin(robot.direction) * robot.speed);
+    },
+    turnLeft: async (deg = 5) => {
+        const rotation = Math.PI * deg / 180;
+        for (let i = 0; i < 100; i++) {
+            robot.setDirection(robot.direction - rotation / 100);
+            await sleep(1);
+        }
+    },
+    turnRight: async (deg = 5) => {
+        const rotation = Math.PI * deg / 180;
+        for (let i = 0; i < 100; i++) {
+            robot.setDirection(robot.direction + rotation / 100);
+            await sleep(1);
+        }
+    }
+};
+
+draw();
+
+function draw() {
+    // clear the canvas
+    ctx.clearRect(0, 0, width, height);
+
+    // fill the canvas background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.95)';
+    ctx.fillRect(0, 0, width, height);
+
+    // draw the ball
+    ctx.fillStyle = robot.color;
+    ctx.beginPath();
+    ctx.arc(robot.x, robot.y, robot.radius, 0, 2 * Math.PI);
+    ctx.fill();
+
+    // draw the direction line
+    ctx.strokeStyle = 'blue';
+    ctx.beginPath();
+    ctx.moveTo(robot.x, robot.y);
+    ctx.lineTo(robot.x + Math.cos(robot.direction) * robot.radius, robot.y + Math.sin(robot.direction) * robot.radius);
+    ctx.stroke();
+
+    // draw the sensor line
+    ctx.strokeStyle = 'red';
+    ctx.beginPath();
+    ctx.moveTo(robot.x, robot.y);
+    ctx.lineTo(robot.x + Math.cos(robot.direction) * (robot.getSensor() + robot.radius), robot.y + Math.sin(robot.direction) * (robot.getSensor() + robot.radius));
+    ctx.stroke();
+
+    // write the stats
+    statsX.innerText = `x: ${robot.x}`;
+    statsY.innerText = `y: ${robot.y}`;
+    statsDirection.innerText = `direction: ${robot.direction}`;
+    statsSensor.innerText = `sensor: ${robot.getSensor()}`;
 }
 
-class Surface {
-    constructor(parent) {
-        this.matrix = Array(COLUMNS).fill().map(() => Array(COLUMNS).fill('.'));
-        this.htmlCells = Array(COLUMNS).fill().map(() => Array(COLUMNS));
-        this.dictinary = {
-            '.': 'empty',
-            '#': 'obstacle',
-            'x': 'mapped',
-            'o': 'robot',
-        };
-        this.createCells(parent)
-    }
+function drawMap(map) {
+    // draw matrix
+    mapCtx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
+    mapCtx.fillStyle = 'rgba(0, 0, 0, 0.95)';
+    mapCtx.fillRect(0, 0, mapCanvas.width, mapCanvas.height);
 
-    createCells(parent) {
-        this.matrix.forEach((row, i) => {
-            row.forEach((cell, j) => {
-                const cell_element = document.createElement('div');
-                cell_element.classList.add('cell');
-                cell_element.addEventListener('click', (e) => {
-                    if (this.matrix[i][j] === 'o') return;
-        
-                    this.set(i, j, this.matrix[i][j] === '#' ? '.' : '#');
-                    this.printMatrix();
-                });
-                parent.appendChild(cell_element);
-                this.htmlCells[i][j] = cell_element;
-            });
-        });
-    }
+    const cellWidth = mapCanvas.width / map.length;
+    const cellHeight = mapCanvas.height / map[0].length;
 
-    set(x, y, value) {
-        this.matrix[x][y] = value;
-        this.updateHtml();
-    }
+    for (let i = 0; i < map.length; i++) {
+        for (let j = 0; j < map[i].length; j++) {
 
-    updateHtml() {
-        this.matrix.forEach((row, i) => {
-            row.forEach((value, j) => {
-                this.htmlCells[i][j].classList = this.dictinary[value];
-            });
-        });
-    }
-
-    printMatrix() {
-        console.clear();
-        this.matrix.forEach(row => {
-            console.log(row.join(' '));
-            console.log();
-        });
-    }
-
-    clear() {
-        this.matrix.forEach(row => row.fill('.'));
-        this.updateHtml();
-    }
-}
-
-class Robot extends Surface {
-    constructor(parent, map) {
-        super(parent);
-        this.x = Math.floor(COLUMNS / 2);
-        this.y = Math.floor(COLUMNS / 2);
-        this.map = map;
-        this.robotSize = 3;
-        this.halfSize = Math.floor(this.robotSize / 2);
-        this.direction = 'up';
-        this.fillAround(this.x, this.y, 'o');
-    }
-
-    clear() {
-        super.clear();
-        this.x = Math.floor(COLUMNS / 2);
-        this.y = Math.floor(COLUMNS / 2);
-        this.fillAround(this.x, this.y, 'o');
-    }
-
-    move(direction) {
-        const prevX = this.x;
-        const prevY = this.y;
-
-        switch (direction) {
-            case 'up':
-                this.moveUp();
-                break;
-            case 'down':
-                this.moveDown();
-                break;
-            case 'right':
-                this.moveRight();
-                break;
-            case 'left':
-                this.moveLeft();
-                break;
-        }
-
-        if (this.x === prevX && this.y === prevY) return;
-
-        this.fillAround(prevX, prevY, '.');
-        this.fillAround(this.x, this.y, 'o');
-
-        const out = this.halfSize + 1;
-
-        for (let i = 0; i < this.robotSize; i++) {
-            let x, y;
-
-            x = this.x - out;
-            y = this.y - this.halfSize + i;
-            if (this.matrix[x]?.[y] === '#')
-                this.map.set(x, y, 'x');
-
-            x = this.x + out;
-            y = this.y - this.halfSize + i;
-            if (this.matrix[x]?.[y] === '#')
-                this.map.set(x, y, 'x');
-
-            x = this.x - this.halfSize + i;
-            y = this.y - out;
-            if (this.matrix[x]?.[y] === '#')
-                this.map.set(x, y, 'x');
-
-            x = this.x - this.halfSize + i;
-            y = this.y + out;
-            if (this.matrix[x]?.[y] === '#')
-                this.map.set(x, y, 'x');
-        }
-    }
-
-    moveUp() {
-        this.x--;
-        if (this.x - 1 < 0) {
-            this.x++;
-            return;
-        }
-        
-        for (let i = 0; i < this.robotSize; i++) {
-            if (this.matrix[this.x - this.halfSize][this.y - this.halfSize + i] === '#') {
-                this.x++;
-                return;
-            };
-        }
-    }
-
-    moveDown() {
-        this.x++;
-        if (this.x + 1 >= COLUMNS) {
-            this.x--;
-            return;
-        }
-        
-        for (let i = 0; i < this.robotSize; i++) {
-            if (this.matrix[this.x + this.halfSize][this.y - this.halfSize + i] === '#') {
-                this.x--;
-                return;
-            };
-        }
-    }
-
-    moveRight() {
-        this.y++;
-        if (this.y + 1 >= COLUMNS) {
-            this.y--;
-            return;
-        }
-        
-        for (let i = 0; i < this.robotSize; i++) {
-            if (this.matrix[this.x - this.halfSize + i][this.y + this.halfSize] === '#') {
-                this.y--;
-                return;
-            };
-        }
-    }
-
-    moveLeft() {
-        this.y--;
-        if (this.y - 1 < 0) {
-            this.y++;
-            return;
-        }
-        
-        for (let i = 0; i < this.robotSize; i++) {
-            if (this.matrix[this.x - this.halfSize + i][this.y - this.halfSize] === '#') {
-                this.y++;
-                return;
-            };
-        }
-    }
-
-    fillAround(x, y, marker) {
-        for (let i = 0; i < this.robotSize; i++) {
-            for (let j = 0; j < this.robotSize; j++) {
-                this.matrix[x - this.halfSize + i][y - this.halfSize + j] = marker;
+            if (map[i][j] === 1) {
+                mapCtx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                mapCtx.fillRect(i * cellWidth, j * cellHeight, cellWidth, cellHeight);
             }
+
+            mapCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            mapCtx.strokeRect(i * cellWidth, j * cellHeight, cellWidth, cellHeight);
         }
-        this.updateHtml();
     }
 }
 
-const surface = new Surface(mappedSurfaceElement);
-const robot = new Robot(robotSurfaceElement, surface);
-
-clearButton.addEventListener('click', (e) => {
-    surface.clear();
-    robot.clear();
-});
-
-document.addEventListener('keydown', (e) => {
-    switch (e.key) {
+document.addEventListener('keydown', (event) => {
+    switch (event.key) {
         case 'ArrowUp':
-            robot.move('up');
+            robot.moveForward();
             break;
         case 'ArrowDown':
-            robot.move('down');
+            robot.moveBackward();
             break;
         case 'ArrowLeft':
-            robot.move('left');
+            robot.turnLeft();
             break;
         case 'ArrowRight':
-            robot.move('right');
+            robot.turnRight();
             break;
     }
 });
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function ai() {
+    const map = new Array(30).fill(0).map(() => new Array(30).fill(0));
+
+    let forwardCounter = 0;
+    let i = map.length / 2;
+    let j = map[0].length / 2;
+
+    while (1) {
+        if (robot.getSensor() > 5 && map[i + Math.round(Math.cos(robot.direction))][j + Math.round(Math.sin(robot.direction))] !== 1) {
+            robot.moveForward();
+            forwardCounter++;
+
+            if (forwardCounter >= robot.radius) {
+                forwardCounter = 0;
+                map[i][j] = 1;
+                i += Math.round(Math.cos(robot.direction));
+                j += Math.round(Math.sin(robot.direction));
+            }
+        } else {
+            await robot.turnLeft(90);
+        }
+
+        drawMap(map);
+
+        await sleep(0);
+    }
+}
+
+ai();

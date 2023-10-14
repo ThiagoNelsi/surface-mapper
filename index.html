@@ -2,19 +2,22 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Surface</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>Robo Aspirador</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="script.js" defer></script>
 </head>
 <body>
-    <div class="container">
-        <div class="surfaces">
-            <div class="surface" id="surface"></div>
-            <div class="surface" id="mapped"></div>
+    <div class="dash">
+        <canvas id="canvas"></canvas>
+        <canvas id="map"></canvas>
+        <div class="stats">
+            <p id="x">x</p>
+            <p id="y">y</p>
+            <p id="radius"></p>
+            <p id="direction">direction</p>
+            <p id="sensor">sensor</p>
         </div>
-        <button id="btn-clear">Clear</button>
     </div>
-    <script src="script.js"></script>
 </body>
 </html>
